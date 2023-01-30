@@ -1,0 +1,30 @@
+embeddings:
+  UMAP:
+    x: means
+    y: stds
+  TSNE:
+    x: means
+    y: maxvals
+  PCA:
+    x: stds
+    y: maxvals
+  default: UMAP
+color-columns:
+  categorical:
+    - roi
+    # - patch_id
+    # - plate
+    # - compound
+    # - concentration
+    # - moa
+  numerical:
+    - patch_id
+image-column:
+  imagepath
+tooltip-columns:
+  - roi
+  - maxvals
+  - means
+  - stds
+plots:
+  glyph_size: 2.0
