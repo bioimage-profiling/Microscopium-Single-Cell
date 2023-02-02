@@ -5,8 +5,8 @@ embeddings:
   default: UMAP
 color-columns:
   categorical:
-    # - donor
-    - cluster
+    - donor
+    # - cluster
     # - plate
     # - compound
     # - concentration

@@ -69,8 +69,30 @@ def imread(paths):
         # for bokeh image_rgba function
         image = image.view("uint32").reshape(image.shape[:2])
         images.append(image)
-        
     return images
+
+# white image
+def make_white_image(paths):
+    image = io.imread(paths[0]).astype('float64')
+    # change range to [0,1] 
+    if image.ndim == 2: # gray image
+        # image = change_range(image)
+        image = image.astype('uint8')
+        image = gray2rgba(image)
+    elif image.ndim >= 3: # RGB image
+        # for i in range(image.shape[-1]):
+        #     image[:, :, i] = change_range(image[:, :, i])
+        image = image.astype('uint8')
+        shape = image.shape[:2]
+        alpha = np.full((shape + (1,)), 255, dtype='uint8')
+        image = np.concatenate((image, alpha), axis=2)
+    else:
+        exit('What kind of image is this!?!?!?!?')
+        
+    image = np.ones_like(image, dtype='uint8')*255    
+    image = image.view("uint32").reshape(image.shape[:2])
+    
+    return image
 
 def prepare_xy(source, settings):
     default_embedding = settings['embeddings']['default']
@@ -93,35 +115,11 @@ def source_from_dataframe(dataframe, settings, current_selection):
     return source
 
 
-def update_image_canvas_single(index, data, source):
-    """Update image canvas when a single image is selected on the scatter plot.
-
-    The ``ColumnDataSource`` `source` will be updated in-place, which will
-    cause the ``image_rgba`` plot to automatically update.
-
-    Parameters
-    ----------
-    index : string
-        The index value of the selected point. This must match the index on
-        `data`.
-    data : DataFrame
-        The image properties dataset. It must include a 'path' pointing to the
-        image file for each image.
-    source : ColumnDataSource
-        The ``image_rgba`` data source. It must include the columns 'image',
-        'x', 'y', 'dx', 'dy'.
-    """
-    filename = data['AF750_imagepath'].iloc[index]
-    # open images
-    newimage = imread([filename])
-    source.data = {'image': newimage, 'x': [0], 'y': [0], 'dx': [1], 'dy': [1]} # <== newimage is already list
-
-
 def update_image_canvas_multi_channel(indices, data, source, settings):
     
     max_samples = len(settings['image-columns'])
     
-    n_samples = len(indices)  
+    n_samples = len(indices)
     if n_samples > max_samples:
         indices = indices[:max_samples]
         n_samples = len(indices)
@@ -130,8 +128,10 @@ def update_image_canvas_multi_channel(indices, data, source, settings):
     for channelpath in settings['image-columns']:
         filenames = data.iloc[indices][channelpath]
         channelimages = imread(filenames)
+        while len(channelimages) < max_samples:
+            channelimages.append(make_white_image(filenames))
         images += channelimages
-      
+        
     # Set sidelen to number of channels (NB! Only number of samples equal to the number of channels will be shown)
     sidelen =  len(settings['image-columns']) # 5x5 meshgrid
     step_size = 1 / sidelen # 0.2 stepsize
@@ -145,26 +145,6 @@ def update_image_canvas_multi_channel(indices, data, source, settings):
                    'x': start_xs.ravel() + margin,
                    'y': start_ys.ravel() + margin,
                    'dx': step_sizes * 0.95, 'dy': step_sizes * 0.95}
-    
-    # Set sidelen to number of channels (NB! Only number of samples equal to the number of channels will be shown)
-    # sidelen_x = len(settings['image-columns']) # 5x5 meshgrid
-    # sidelen_y = n_samples # 5x5 meshgrid
-    # step_size_x = 1 / sidelen_x # stepsize for x axis
-    # step_size_y = 1 / sidelen_y # stepsize for y axis
-    # grid_points_x = np.arange(0, 1 - step_size_x/2, step_size_x) # 5 grid points
-    # grid_points_y = np.arange(0, 1 - step_size_y/2, step_size_y) # 5 grid points
-    # start_xs, start_ys = np.meshgrid(grid_points_x, grid_points_y, indexing='ij') # start x, y for each grid
-    # # n_rows = len(images) # number of rows that the images will occupy
-    # n_rows = len(images) # number of rows that the images will occupy
-    # step_sizes_x = np.full(n_rows, step_size_x)
-    # step_sizes_y = np.full(n_rows, step_size_y)
-    # step_sizes_y[n_samples:] = 0
-    # margin_x = 0.05 * step_size_x / 2
-    # margin_y = 0.05 * step_size_y / 2
-    # source.data = {'image': images,
-    #                'x': start_xs.ravel() + margin_x,
-    #                'y': start_ys.ravel() + margin_y,
-    #                'dx': step_sizes_x * 0.95, 'dy': step_sizes_y * 0.95}
 
 
 def _dynamic_range(fig, range_padding=0.05, range_padding_units='percent'):
@@ -215,20 +195,19 @@ def embedding(source, settings):
                    output_backend='webgl')
     embed = _dynamic_range(embed)
     color_column = settings['color-columns']['categorical'][0]
-    if color_column in source.data:
-        group_names = pd.Series(source.data[color_column]).unique()
-        my_colors = _palette(len(group_names))
-        for i, group in enumerate(group_names):
-            group_filter = GroupFilter(column_name=color_column, group=group)
-            view = CDSView(source=source, filters=[group_filter])
-            glyphs = embed.circle(x="x", y="y",
-                                  source=source, view=view, size=glyph_size,
-                                  color=my_colors[i], legend_label=group)
-        embed.legend.location = "top_right"
-        embed.legend.click_policy = "hide"
-        embed.legend.background_fill_alpha = 0.5
-    else:
-        embed.circle(source=source, x='x', y='y', size=glyph_size)
+        
+    group_names = pd.Series(source.data[color_column]).unique()
+    my_colors = _palette(len(group_names))
+    for i, group in enumerate(group_names):
+        group_filter = GroupFilter(column_name=color_column, group=group)
+        view = CDSView(filter=group_filter)
+        glyphs = embed.circle(x="x", y="y",
+                                source=source, view=view, size=glyph_size,
+                                color=my_colors[i], legend_label=group)
+    embed.legend.location = "top_right"
+    embed.legend.click_policy = "hide"
+    embed.legend.background_fill_alpha = 0.5
+        
     return embed
 
 
@@ -382,12 +361,7 @@ def make_makedoc(filename, settings_filename):
             """Update images and table to display selected data."""
             print('new index: ', new)
             # Update images & table
-            if len(new) == 1:  # could be empty selection
-                update_image_canvas_single(new[0], data=dataframe, source=image_holder)
-                # update_image_canvas_multi_channel(new[0], data=dataframe, source=image_holder)
-            elif len(new) > 1:
-                # update_image_canvas_multi(new, data=dataframe, source=image_holder)
-                update_image_canvas_multi_channel(new, data=dataframe, source=image_holder, settings=settings)
+            update_image_canvas_multi_channel(new, data=dataframe, source=image_holder, settings=settings)
             
             reset_plot_axes(image_plot)  # effectively resets zoom level
             update_table(new, dataframe, table)
