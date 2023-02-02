@@ -13,8 +13,12 @@ color-columns:
     # - moa
   # numerical:
   #   - id
-image-column:
-  image_path
+image-columns:
+  - AF488_imagepath
+  - AF555_imagepath
+  - AF647_imagepath
+  - AF750_imagepath
+  - DAPI_imagepath
 tooltip-columns:
   - roi
   # - channel

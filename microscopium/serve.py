@@ -1,34 +1,27 @@
 """This module runs the bokeh server."""
 
 import os
-from os.path import dirname, join
 from math import ceil, sqrt
+from os.path import dirname, join
 
+import bokeh.palettes
 import click
-from skimage import io
-from skimage.color import gray2rgba
 import numpy as np
 import pandas as pd
-
-from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
-from bokeh.plotting import figure
-from bokeh.layouts import layout
-from bokeh.models import (Button,
-                          ColumnDataSource,
-                          CustomJS,
-                          CDSView,
-                          GroupFilter,
-                          Legend,
-                          RadioButtonGroup,
-                          Column)
 from bokeh.events import ButtonClick
+from bokeh.layouts import layout
+from bokeh.models import (Button, CDSView, Column, ColumnDataSource, CustomJS,
+                          GroupFilter, Legend, RadioButtonGroup)
 from bokeh.models.widgets import DataTable, TableColumn
-import bokeh.palettes
+from bokeh.plotting import figure
+from bokeh.server.server import Server
+from skimage import io
+from skimage.color import gray2rgba
 from tornado import web
 
-from .config import load_config, get_tooltips
+from .config import get_tooltips, load_config
 
 # created with https://gist.github.com/alexmill/d71b67ed84fd0150db2c
 # and the code:

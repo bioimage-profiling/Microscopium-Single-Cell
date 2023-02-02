@@ -14,7 +14,7 @@ color-columns:
   # numerical:
   #   - id
 image-column:
-  image_path
+  image_names
 tooltip-columns:
   - roi
   # - channel

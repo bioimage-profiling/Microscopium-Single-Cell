@@ -30,21 +30,13 @@ from tornado import web
 
 from .config import load_config, get_tooltips
 
-# created with https://gist.github.com/alexmill/d71b67ed84fd0150db2c
-# and the code:
-# from the My First Pixel Art (TM) School of Design
-# dotdotdot = np.full((7, 7, 4), 255, dtype=np.uint8)
-# dotdotdot[3, 1::2, :3] = 0
-B64DOT = (
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAA'
-    'AHklEQVR42mP8////fwYcgIkBDyAsycjIyICVpo2dAHlfCA5LYYapAAAAAElFTkSuQmCC'
-)
-
-
-def dataframe_from_file(filename, image_path_column):
+def dataframe_from_file(filename, settings):
     """Read in pandas dataframe from filename."""
     df = pd.read_csv(filename, index_col=0)
-    # df['path'] = df[image_path_column]
+    # columns = {}
+    # for i in range(len(settings['image-columns'])):
+    #     columns[settings['image-columns']] = f'channel{i}_path'
+    # df.rename(columns=columns)
     return df
 
 # change range to (0,1)
@@ -55,7 +47,7 @@ def change_range(image, C=0, D=255):
     return image
 
 # for image_rgb
-def imread(paths, channel=0, size=50):
+def imread(paths):
     images = []
     for path in paths:
         image = io.imread(path).astype('float64')
@@ -79,23 +71,6 @@ def imread(paths, channel=0, size=50):
         images.append(image)
         
     return images
-
-# for image
-# def imread(paths, channel=0, size=50):
-#     images = []
-#     for path in paths:
-#         image = io.imread(str(path)).astype('float64')
-#         print(path)
-#         # change range to [0,1] 
-#         if image.ndim == 2: # gray image
-#             # image = change_range(image)
-#             image = image.astype('uint8')
-#         else:
-#             exit('What kind of image is this!?!?!?!?')
-        
-#         # for bokeh image_rgba function
-#         images.append(image)
-#     return images
 
 def prepare_xy(source, settings):
     default_embedding = settings['embeddings']['default']
@@ -142,89 +117,54 @@ def update_image_canvas_single(index, data, source):
     source.data = {'image': newimage, 'x': [0], 'y': [0], 'dx': [1], 'dy': [1]} # <== newimage is already list
 
 
-def update_image_canvas_multi_channel(indices, data, source, max_images=50, n_channels=5):
+def update_image_canvas_multi_channel(indices, data, source, settings):
     
-    max_samples = n_channels
+    max_samples = len(settings['image-columns'])
     
     n_samples = len(indices)  
     if n_samples > max_samples:
         indices = indices[:max_samples]
         n_samples = len(indices)
     
-    # get image paths from each channel
-    filenames1 = data.iloc[indices]['AF488_imagepath']
-    filenames2 = data.iloc[indices]['AF555_imagepath']
-    filenames3 = data.iloc[indices]['AF647_imagepath']
-    filenames4 = data.iloc[indices]['AF750_imagepath']
-    filenames5 = data.iloc[indices]['DAPI_imagepath']
-
-    # open images from each channel
-    channel1_images = imread(filenames1, channel=1)
-    channel2_images = imread(filenames2, channel=2)
-    channel3_images = imread(filenames3, channel=3)
-    channel4_images = imread(filenames4, channel=4)
-    channel5_images = imread(filenames5, channel=5)
-
-    # combine channels, so that is alternating
-    images = channel1_images + channel2_images + channel3_images + channel4_images + channel5_images
-    
+    images = []
+    for channelpath in settings['image-columns']:
+        filenames = data.iloc[indices][channelpath]
+        channelimages = imread(filenames)
+        images += channelimages
+      
     # Set sidelen to number of channels (NB! Only number of samples equal to the number of channels will be shown)
-    sidelen = n_channels # 5x5 meshgrid
+    sidelen =  len(settings['image-columns']) # 5x5 meshgrid
     step_size = 1 / sidelen # 0.2 stepsize
     grid_points_x = np.arange(0, 1 - step_size/2, step_size) # 5 grid points
     grid_points_y = np.arange(0, 1 - step_size/2, step_size) # 5 grid points
     start_xs, start_ys = np.meshgrid(grid_points_x, grid_points_y, indexing='ij') # start x, y for each grid
     n_rows = len(images) # number of rows that the images will occupy
     step_sizes = np.full(n_rows, step_size)
-    margin = 0.05 * step_size / 2
+    margin = 0.05 * step_size / 2  
     source.data = {'image': images,
                    'x': start_xs.ravel() + margin,
                    'y': start_ys.ravel() + margin,
                    'dx': step_sizes * 0.95, 'dy': step_sizes * 0.95}
-
-def update_image_canvas_multi(indices, data, source, max_images=50):
-    """Update image canvas when multiple images are selected on scatter plot.
-
-    The ``ColumnDataSource`` `source` will be updated in-place, which will
-    cause the ``image_rgba`` plot to automatically update.
-
-    Parameters
-    ----------
-    indices : list of string
-        The index values of the selected points. These must match the index on
-        `data`.
-    data : DataFrame
-        The image properties dataset. It must include a 'path' pointing to the
-        image file for each image.
-    source : ColumnDataSource
-        The ``image_rgba`` data source. It must include the columns 'image',
-        'x', 'y', 'dx', 'dy'.
-
-    Notes
-    -----
-    Currently, we implement our own simple grid layout algorithm for the input
-    images. It may or may not be better to instead use a grid of ``image_rgba``
-    plots. It's unclear how we would update those, though.
-    """
-    n_images = len(indices)
-    filenames = data['path'].iloc[indices]
-    if n_images > max_images:
-        filenames = filenames[:max_images - 1]
-    # open images
-    images = imread(filenames)
-    # if n_images > max_images:
-    #     images.append(B64DOT)
-    sidelen = ceil(sqrt(min(n_images, max_images)))
-    step_size = 1 / sidelen
-    grid_points = np.arange(0, 1 - step_size/2, step_size)
-    start_xs, start_ys = np.meshgrid(grid_points, grid_points, indexing='ij')
-    n_rows = len(images)
-    step_sizes = np.full(n_rows, step_size)
-    margin = 0.05 * step_size / 2
-    source.data = {'image': images,
-                   'x': start_xs.ravel()[:n_rows] + margin,
-                   'y': start_ys.ravel()[:n_rows] + margin,
-                   'dx': step_sizes * 0.95, 'dy': step_sizes * 0.95}
+    
+    # Set sidelen to number of channels (NB! Only number of samples equal to the number of channels will be shown)
+    # sidelen_x = len(settings['image-columns']) # 5x5 meshgrid
+    # sidelen_y = n_samples # 5x5 meshgrid
+    # step_size_x = 1 / sidelen_x # stepsize for x axis
+    # step_size_y = 1 / sidelen_y # stepsize for y axis
+    # grid_points_x = np.arange(0, 1 - step_size_x/2, step_size_x) # 5 grid points
+    # grid_points_y = np.arange(0, 1 - step_size_y/2, step_size_y) # 5 grid points
+    # start_xs, start_ys = np.meshgrid(grid_points_x, grid_points_y, indexing='ij') # start x, y for each grid
+    # # n_rows = len(images) # number of rows that the images will occupy
+    # n_rows = len(images) # number of rows that the images will occupy
+    # step_sizes_x = np.full(n_rows, step_size_x)
+    # step_sizes_y = np.full(n_rows, step_size_y)
+    # step_sizes_y[n_samples:] = 0
+    # margin_x = 0.05 * step_size_x / 2
+    # margin_y = 0.05 * step_size_y / 2
+    # source.data = {'image': images,
+    #                'x': start_xs.ravel() + margin_x,
+    #                'y': start_ys.ravel() + margin_y,
+    #                'dx': step_sizes_x * 0.95, 'dy': step_sizes_y * 0.95}
 
 
 def _dynamic_range(fig, range_padding=0.05, range_padding_units='percent'):
@@ -427,13 +367,13 @@ def make_makedoc(filename, settings_filename):
         A makedoc function as expected by ``FunctionHandler``.
     """
     settings = load_config(settings_filename)
-    dataframe = dataframe_from_file(filename, settings['image-column'])
+    dataframe = dataframe_from_file(filename, settings)
 
     def makedoc(doc):
-        source = ColumnDataSource(dataframe)
+        source = ColumnDataSource(dataframe) # columndatasource for 'only' plotting umap
         prepare_xy(source, settings)  # get the default embedding columns
         embed = embedding(source, settings)
-        image_plot, image_holder = selected_images()
+        image_plot, image_holder = selected_images() # image_holder: columndatasource for only images
         table = empty_table(dataframe)
         controls = [button_save_table(table), button_print_page()]
         radio_buttons = switch_embeddings_button_group(settings)
@@ -447,7 +387,7 @@ def make_makedoc(filename, settings_filename):
                 # update_image_canvas_multi_channel(new[0], data=dataframe, source=image_holder)
             elif len(new) > 1:
                 # update_image_canvas_multi(new, data=dataframe, source=image_holder)
-                update_image_canvas_multi_channel(new, data=dataframe, source=image_holder)
+                update_image_canvas_multi_channel(new, data=dataframe, source=image_holder, settings=settings)
             
             reset_plot_axes(image_plot)  # effectively resets zoom level
             update_table(new, dataframe, table)
