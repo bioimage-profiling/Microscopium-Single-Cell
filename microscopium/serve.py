@@ -211,20 +211,19 @@ def embedding(source, settings):
                    output_backend='webgl')
     embed = _dynamic_range(embed)
     color_column = settings['color-columns']['categorical'][0]
-    if color_column in source.data:
-        group_names = pd.Series(source.data[color_column]).unique()
-        my_colors = _palette(len(group_names))
-        for i, group in enumerate(group_names):
-            group_filter = GroupFilter(column_name=color_column, group=group)
-            view = CDSView(source=source, filters=[group_filter])
-            glyphs = embed.circle(x="x", y="y",
-                                  source=source, view=view, size=glyph_size,
-                                  color=my_colors[i], legend_label=group)
-        embed.legend.location = "top_right"
-        embed.legend.click_policy = "hide"
-        embed.legend.background_fill_alpha = 0.5
-    else:
-        embed.circle(source=source, x='x', y='y', size=glyph_size)
+         
+    group_names = pd.Series(source.data[color_column]).unique()
+    my_colors = _palette(len(group_names))
+    for i, group in enumerate(group_names):
+        group_filter = GroupFilter(column_name=color_column, group=group)
+        view = CDSView(filter=group_filter)
+        glyphs = embed.circle(x="x", y="y",
+                                source=source, view=view, size=glyph_size,
+                                color=my_colors[i], legend_label=group)
+    embed.legend.location = "top_right"
+    embed.legend.click_policy = "hide"
+    embed.legend.background_fill_alpha = 0.5
+        
     return embed
 
 

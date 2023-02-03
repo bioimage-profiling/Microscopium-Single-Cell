@@ -8,6 +8,6 @@
 #         -c bomi/settings.yaml \
 #         -P 5001
 
-python -m microscopium.serve_channels bomi/bomi_small.csv\
+python -m microscopium.serve_channels bomi/bomi_umap.csv\
         -c bomi/settings_5channel.yaml \
         -P 5001
