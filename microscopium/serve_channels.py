@@ -2,6 +2,7 @@
 
 import os
 from os.path import dirname, join
+from pathlib import Path
 from math import ceil, sqrt
 
 import click
@@ -55,9 +56,27 @@ def change_range(image, C=0, D=255):
     B = image.max()
     image = (image - A)*(D - C)/(B - A) + C
     return image
+class med_quan():
+    def __init__(self):
+        self.medians = {}
+        self.quantiles = {}
+        self.medians['c1_imgpath'] =  128.9 
+        self.medians['c2_imgpath'] =  260.0 
+        self.medians['c3_imgpath'] =  179.6 
+        self.medians['c4_imgpath'] =  496.9 
+        self.medians['c5_imgpath'] =  124.9
+        self.quantiles['c1_imgpath'] = 3442.8
+        self.quantiles['c2_imgpath'] = 314.7
+        self.quantiles['c3_imgpath'] = 3662.9
+        self.quantiles['c4_imgpath'] = 4941.6
+        self.quantiles['c5_imgpath'] = 3882.3
+    def return_med_quan(self, channel_col):
+        return self.medians[channel_col], self.quantiles[channel_col]
+med_quan = med_quan() # very bad practice (i don't have much time)
 
 # for image_rgb
-def imread(paths, centroidxs, centroidys, size=50):
+def imread(paths, centroidxs, centroidys, channel_col, size=50):
+    lowcut, highcut = med_quan.return_med_quan(channel_col)
     images = []
     for path, cx, cy in zip(paths, centroidxs, centroidys):
         image = io.imread(path).astype('float64')
@@ -73,7 +92,7 @@ def imread(paths, centroidxs, centroidys, size=50):
         image = image[xmi:xma, ymi:yma]
         # change range to [0,1]
         if image.ndim == 2: # gray image
-            image = np.clip(image, 128, 2520)
+            image = np.clip(image, lowcut, highcut)
             image = change_range(image, C=0, D=255).astype('uint8')
             image = gray2rgba(image)
         elif image.ndim >= 3: # RGB image
@@ -149,9 +168,9 @@ def update_image_canvas_multi_channel(indices, data, source, settings):
         n_samples = len(indices)
     
     images = []
-    for channelpath in settings['image-columns']:
-        filenames = data.iloc[indices][channelpath]
-        channelimages = imread(filenames, centroidxs, centroidys)
+    for channel_col in settings['image-columns']:
+        filenames = data.iloc[indices][channel_col]
+        channelimages = imread(filenames, centroidxs, centroidys, channel_col)
         while len(channelimages) < max_samples:
             channelimages.append(make_white_image(filenames))
         images += channelimages
