@@ -39,6 +39,16 @@ def dataframe_from_file(filename, settings):
     # df.rename(columns=columns)
     return df
 
+# check if out of bounds
+def ccc(s0, s1, cc):
+    if cc <= 0:
+        return 0
+    elif cc >= s0:
+        return s0-1
+    elif cc >= s1:
+        return s1-1
+    else:
+        return cc
 # change range to (0,1)
 def change_range(image, C=0, D=255):
     A = image.min()
@@ -47,14 +57,24 @@ def change_range(image, C=0, D=255):
     return image
 
 # for image_rgb
-def imread(paths):
+def imread(paths, centroidxs, centroidys, size=50):
     images = []
-    for path in paths:
+    for path, cx, cy in zip(paths, centroidxs, centroidys):
         image = io.imread(path).astype('float64')
-        # change range to [0,1] 
+        ymi = int(cx - size)
+        yma = int(cx + size)
+        xmi = int(cy - size)
+        xma = int(cy + size)      
+        # check if out of bounds
+        xmi = ccc(image.shape[0], image.shape[1], xmi)
+        xma = ccc(image.shape[0], image.shape[1], xma)
+        ymi = ccc(image.shape[0], image.shape[1], ymi)
+        yma = ccc(image.shape[0], image.shape[1], yma)
+        image = image[xmi:xma, ymi:yma]
+        # change range to [0,1]
         if image.ndim == 2: # gray image
-            # image = change_range(image)
-            image = image.astype('uint8')
+            image = np.clip(image, 128, 2520)
+            image = change_range(image, C=0, D=255).astype('uint8')
             image = gray2rgba(image)
         elif image.ndim >= 3: # RGB image
             # for i in range(image.shape[-1]):
@@ -65,7 +85,8 @@ def imread(paths):
             image = np.concatenate((image, alpha), axis=2)
         else:
             exit('What kind of image is this!?!?!?!?')
-        
+            
+                
         # for bokeh image_rgba function
         image = image.view("uint32").reshape(image.shape[:2])
         images.append(image)
@@ -73,7 +94,8 @@ def imread(paths):
 
 # white image
 def make_white_image(paths):
-    image = io.imread(paths[0]).astype('float64')
+    # image = io.imread(paths[0]).astype('float64')
+    image = np.zeros(shape=(100,100))
     # change range to [0,1] 
     if image.ndim == 2: # gray image
         # image = change_range(image)
@@ -118,6 +140,8 @@ def source_from_dataframe(dataframe, settings, current_selection):
 def update_image_canvas_multi_channel(indices, data, source, settings):
     
     max_samples = len(settings['image-columns'])
+    centroidxs = data[settings['centroid-x-column']].iloc[indices]
+    centroidys = data[settings['centroid-y-column']].iloc[indices]
     
     n_samples = len(indices)
     if n_samples > max_samples:
@@ -127,7 +151,7 @@ def update_image_canvas_multi_channel(indices, data, source, settings):
     images = []
     for channelpath in settings['image-columns']:
         filenames = data.iloc[indices][channelpath]
-        channelimages = imread(filenames)
+        channelimages = imread(filenames, centroidxs, centroidys)
         while len(channelimages) < max_samples:
             channelimages.append(make_white_image(filenames))
         images += channelimages

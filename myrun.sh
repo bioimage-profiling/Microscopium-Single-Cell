@@ -10,4 +10,4 @@
 
 python -m microscopium.serve_channels bomi/bomi_umap.csv\
         -c bomi/settings_5channel.yaml \
-        -P 5001
+        -P 5000
